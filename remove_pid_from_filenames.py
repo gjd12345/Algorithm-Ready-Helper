@@ -52,5 +52,6 @@ def remove_pid_prefix(directory):
     print(f"Successfully renamed {count} files.")
 
 if __name__ == "__main__":
-    base_dir = r"c:\Users\24294\.trae\leetcode-hot100-ACM\大厂笔试真题"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.join(BASE_DIR, "大厂笔试真题")
     remove_pid_prefix(base_dir)

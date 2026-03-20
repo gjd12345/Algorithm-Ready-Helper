@@ -204,7 +204,8 @@ def create_notebook(problem_data, output_path):
         nbf.write(nb, f)
 
 def main():
-    base_dir = r"c:\Users\24294\.trae\leetcode-hot100-ACM\大厂笔试真题"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.join(BASE_DIR, "大厂笔试真题")
     
     # 首先处理用户额外指定的题目
     extra_problems = [

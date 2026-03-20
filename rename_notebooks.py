@@ -3,7 +3,8 @@ import json
 import re
 
 def rename_notebooks():
-    base_dir = r"c:\Users\24294\.trae\leetcode-hot100-ACM\大厂笔试真题"
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.join(BASE_DIR, "大厂笔试真题")
     
     # 遍历所有子目录
     for root, dirs, files in os.walk(base_dir):
