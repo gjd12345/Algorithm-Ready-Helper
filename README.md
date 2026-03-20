@@ -67,7 +67,7 @@
 ## 📂 目录结构预览
 
 ```text
-📦 leetcode-hot100-ACM
+📦 Algorithm-Ready-Helper
  ┣ 📂 src/main/python/        # 🐍 LeetCode Hot 100 经典题目的手写实现
  ┣ 📂 search_tool/            # 🚀 核心服务：本地搜索与 RAG 系统
  ┃ ┣ 📜 server.py             # 🖥️ 多线程后端：AI 逻辑、视频流代理与 Obsidian 同步
@@ -94,7 +94,7 @@ pip install requests chromadb langchain-community langchain-huggingface langchai
 ```
 
 ### 2️⃣ 基础配置
-编辑 [server.py](file:///c:/Users/24294/.trae/leetcode-hot100-ACM/search_tool/server.py)，配置你的专属环境：
+编辑 [server.py]，配置你的专属环境：
 ```python
 BASE_DIR = r"YOUR_PROJECT_PATH" 
 OBSIDIAN_VAULT_PATH = r"YOUR_OBSIDIAN_VAULT_PATH"
