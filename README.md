@@ -68,14 +68,14 @@
 
 ```text
 📦 leetcode-hot100-ACM
- ┣ 📂 大厂笔试真题/           # 🏢 核心题库：按公司分类的历年机试真题（.ipynb）
- ┣ 📂 大厂面试真题/           # 💬 面试面经与系统设计题目（.md）
  ┣ 📂 src/main/python/        # 🐍 LeetCode Hot 100 经典题目的手写实现
  ┣ 📂 search_tool/            # 🚀 核心服务：本地搜索与 RAG 系统
  ┃ ┣ 📜 server.py             # 🖥️ 多线程后端：AI 逻辑、视频流代理与 Obsidian 同步
  ┃ ┣ 📜 ingest.py             # 📥 向量库构建：本地题目 Embedding 化
  ┃ ┣ 📜 index.html            # 🎨 沉浸式 UI：画廊壁纸、专注模式与 AI 对话
- ┃ ┗ 📂 chroma_db/            # 🗄️ Chroma 向量数据库持久化目录
+ ┃ ┗ 📂 chroma_db/            # 🗄️ (自动生成) Chroma 向量数据库持久化目录
+ ┣ 📂 大厂笔试真题/           # 🏢 (需自行添加) 存放你的历年机试真题（.ipynb）
+ ┣ 📂 大厂面试真题/           # 💬 (需自行添加) 存放面试面经与系统设计题目（.md）
  ┗ 📜 *.py                    # 🧹 各种数据抓取、清洗与重命名脚本
 ```
 
@@ -91,6 +91,8 @@ cd leetcode-hot100-ACM
 
 # 安装运行与检索依赖
 pip install requests chromadb langchain-community langchain-huggingface langchain-text-splitters langchain-core sentence-transformers nbformat
+```
+
 ### 2️⃣ 基础配置
 编辑 [server.py](file:///c:/Users/24294/.trae/leetcode-hot100-ACM/search_tool/server.py)，配置你的专属环境：
 ```python
