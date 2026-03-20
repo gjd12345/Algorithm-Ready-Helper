@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大厂面试/笔试真题搜索 & AI 助手</title>
+    <!-- Add Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        #bg-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: radial-gradient(circle at 20% 20%, #f0f4ff 0%, #ffffff 50%, #f5f0ff 100%);
+            background-size: cover;
+            background-position: center;
+            overflow: hidden;
+            transition: background 1s ease;
+        }
+        #bg-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1; /* Same as container, will be managed by opacity */
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 1.5s ease;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: transparent;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: transparent;
+            position: relative;
+            z-index: 1;
+        }
+        .ai-sidebar {
+            width: 450px;
+            background: rgba(0, 0, 0, 0.1); /* Darker but very thin tint to let colors through */
+            backdrop-filter: blur(15px) saturate(150%); /* Add saturation to make BG colors pop */
+            -webkit-backdrop-filter: blur(15px) saturate(150%);
+            border-left: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        /* Session List Overlay */
+        .session-panel {
+            position: absolute;
+            top: 0;
+            left: -200px;
+            width: 200px;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            transition: left 0.3s ease;
+            z-index: 50;
+        }
+        .session-panel.active { left: 0; }
+        
+        .chat-header {
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(5px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 101;
+            position: relative;
+            flex-wrap: nowrap;
+            height: 45px;
+            box-sizing: border-box;
+            color: #fff;
+        }
+        
+        #currentSessionTitle {
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100px; /* Further restrict to ensure space for buttons */
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .session-list-header {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .session-items {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .session-item {
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #555;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            transition: background 0.2s;
+            position: relative;
+        }
+        .session-item:hover { background: #eee; }
+        .session-item.active { background: #007aff; color: white; }
+        .session-item .delete-session {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+            color: #ff3b30;
+            padding: 2px 5px;
+        }
+        .session-item:hover .delete-session { display: block; }
+        .new-chat-btn {
+            width: calc(100% - 20px);
+            margin: 10px;
+            padding: 8px;
+            background: #007aff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .toggle-sessions {
+            padding: 5px 10px;
+            cursor: pointer;
+            color: #007aff;
+            font-size: 12px;
+        }
+        .container {
+            background-color: rgba(0, 0, 0, 0.15); /* Neutral dark tint */
+            backdrop-filter: blur(10px) saturate(160%); /* Lower blur, higher saturation */
+            -webkit-backdrop-filter: blur(10px) saturate(160%);
+            padding: 30px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+        }
+        h1 { text-align: center; color: #fff; text-shadow: 0 2px 15px rgba(0,0,0,0.5); margin-top: 0; font-weight: 800; letter-spacing: 1px; }
+        .search-box { margin-bottom: 20px; }
+        input[type="text"] {
+            width: 100%; padding: 12px 20px; font-size: 18px;
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; box-sizing: border-box;
+            outline: none; transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        input[type="text"]:focus { border-color: #007aff; background: rgba(255, 255, 255, 0.2); }
+        input[type="text"]::placeholder { color: rgba(255,255,255,0.4); }
+        .filters { margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .filter-btn {
+            padding: 6px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1); cursor: pointer; font-size: 13px;
+            transition: all 0.2s;
+            color: #eee;
+        }
+        .filter-btn:hover { background: rgba(255, 255, 255, 0.25); color: #fff; }
+        .filter-btn.active { background-color: #007aff; color: white; border-color: #007aff; box-shadow: 0 4px 15px rgba(0,122,255,0.4); }
+        .results-info { margin-bottom: 10px; color: rgba(255,255,255,0.8); text-shadow: 0 1px 3px rgba(0,0,0,0.5); font-size: 14px; font-weight: 500; }
+        .problem-list { list-style: none; padding: 0; }
+        .web-guide-container {
+            display: none;
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .web-guide-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .web-link-banner {
+            display: none;
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 5px solid #2196f3;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .problem-item {
+            padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex; justify-content: space-between; align-items: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(255, 255, 255, 0.03);
+            margin-bottom: 8px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.02);
+        }
+        .problem-item:hover { 
+            background: rgba(255, 255, 255, 0.1); 
+            transform: translateX(8px) scale(1.01);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .open-menu {
+            position: fixed;
+            z-index: 2000;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            padding: 12px;
+            width: 220px;
+            display: none;
+        }
+
+        .open-menu-title {
+            font-size: 13px;
+            color: #333;
+            margin: 2px 0 8px;
+        }
+
+        .open-menu button {
+            width: 100%;
+            margin: 4px 0;
+        }
+
+        .open-menu-row {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #555;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            user-select: none;
+        }
+        .problem-title { font-size: 15px; font-weight: 600; color: #007aff; cursor: pointer; }
+        .problem-title:hover { text-decoration: underline; }
+        .problem-path { font-size: 11px; color: #888; margin-top: 2px; }
+        .problem-tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: 5px; }
+        .ai-tag { background-color: #e8f5e9; color: #2e7d32; }
+        .cat-tag { background-color: #f3e5f5; color: #7b1fa2; }
+        .nav-btn {
+            font-size: 12px; padding: 6px 12px; background: #007aff;
+            color: white; border: none; border-radius: 6px; cursor: pointer;
+        }
+        .nav-btn:hover { background: #005bb7; }
+        .obsidian-btn {
+            font-size: 12px; padding: 6px 12px; background: #7c4dff;
+            color: white; border: none; border-radius: 6px; cursor: pointer;
+            margin-left: 5px;
+        }
+        .obsidian-btn:hover { background: #651fff; }
+
+        /* Background Switcher Button */
+        #bgSwitcher {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+            font-size: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        #bgSwitcher:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* Focus Mode Toggle */
+        #focusModeToggle {
+            position: fixed;
+            bottom: 20px;
+            left: 70px;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 0 15px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            user-select: none;
+        }
+        #focusModeToggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        #focusModeToggle .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #007aff;
+            box-shadow: 0 0 10px #007aff;
+        }
+        
+        /* Focus Mode Styles */
+        body.focus-bg .container,
+        body.focus-bg .ai-sidebar,
+        body.focus-bg .chat-input-area,
+        body.focus-bg .chat-header {
+            background-color: rgba(0, 0, 0, 0.02) !important;
+            backdrop-filter: blur(2px) !important;
+            border-color: rgba(255, 255, 255, 0.02) !important;
+        }
+        body.focus-bg .problem-item {
+            opacity: 0.3;
+        }
+        body.focus-bg h1, 
+        body.focus-bg .results-info {
+            opacity: 0.2;
+        }
+        body.focus-bg .ai-sidebar {
+            width: 50px; /* Collapse sidebar in BG focus */
+            overflow: hidden;
+        }
+        body.focus-bg .chat-messages,
+        body.focus-bg .chat-input-area {
+            opacity: 0.1;
+        }
+
+        /* Transitions for all elements */
+        .container, .ai-sidebar, .problem-item, h1, .results-info, .chat-messages, .chat-input-area {
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* AI Chat Styles */
+        .chat-messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; background: transparent; }
+        .message { max-width: 90%; padding: 14px 18px; border-radius: 18px; font-size: 14px; line-height: 1.6; word-wrap: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .user-message { align-self: flex-end; background: #007aff; color: white; border-bottom-right-radius: 4px; opacity: 0.9; }
+        .ai-message { 
+            align-self: flex-start; 
+            background: rgba(0, 0, 0, 0.2); /* Darker thin tint for AI messages */
+            backdrop-filter: blur(10px) saturate(140%);
+            color: #fff; 
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            border-bottom-left-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Markdown in Chat (Both User and AI) */
+        .message h1, .message h2, .message h3 { font-size: 1.1em; margin: 10px 0 5px; color: inherit; }
+        .message p { margin-bottom: 8px; }
+        .message p:last-child { margin-bottom: 0; }
+        .message code { background: rgba(255,255,255,0.15); padding: 2px 4px; border-radius: 4px; font-family: monospace; color: inherit; }
+        .user-message code { background: rgba(255,255,255,0.2); }
+        .message pre { background: rgba(0,0,0,0.5); color: #d4d4d4; padding: 14px; border-radius: 12px; overflow-x: auto; margin: 10px 0; border: 1px solid rgba(255,255,255,0.1); }
+        .message pre code { background: transparent; padding: 0; color: inherit; }
+        .message ul, .message ol { padding-left: 20px; margin-bottom: 8px; }
+        .message blockquote { border-left: 3px solid #ccc; padding-left: 10px; color: inherit; opacity: 0.8; margin: 8px 0; }
+        
+        .chat-input-area { 
+            padding: 15px; 
+            border-top: 1px solid rgba(255, 255, 255, 0.1); 
+            display: flex; 
+            gap: 10px; 
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+        }
+        #chatInput { 
+            flex: 1; 
+            padding: 10px 15px; 
+            border: 1px solid rgba(255,255,255,0.2); 
+            border-radius: 10px; 
+            outline: none; 
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            transition: all 0.2s;
+        }
+        #chatInput::placeholder { color: rgba(255,255,255,0.6); }
+        #chatInput:focus { background: rgba(255, 255, 255, 0.4); border-color: #007aff; }
+        #sendChat { 
+            padding: 8px 20px; 
+            background: #007aff; 
+            color: white; 
+            border: none; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        #sendChat:hover { background: #005bb7; transform: scale(1.05); }
+
+        /* Description Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.4);
+            backdrop-filter: blur(8px);
+            animation: fadeIn 0.3s ease;
+        }
+        .modal-content {
+            background-color: rgba(255, 255, 255, 0.15); /* Very transparent modal */
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 24px;
+            width: 70%;
+            max-width: 900px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            color: #fff;
+        }
+        .modal-header {
+            padding: 20px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .modal-header h2 { margin: 0; color: #fff; }
+        .modal-body {
+            padding: 30px;
+            overflow-y: auto;
+            flex: 1;
+            background: transparent;
+        }
+        .modal-footer {
+            padding: 16px 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .ai-action-btn {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.2s, background 0.2s;
+        }
+        .ai-action-btn:hover { background-color: #0062cc; transform: translateY(-1px); }
+        .ai-action-btn:active { transform: translateY(0); }
+
+        /* Floating action button for selection */
+        #selectionMenu {
+            display: none;
+            position: absolute;
+            background: #333;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 2000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        #selectionMenu:after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px 5px 0;
+            border-style: solid;
+            border-color: #333 transparent transparent;
+        }
+    </style>
+</head>
+<body>
+    <div id="bg-container">
+        <video id="bg-video" autoplay muted loop playsinline></video>
+    </div>
+    <div id="bgSwitcher" title="更换背景">🎨</div>
+    <div id="focusModeToggle" title="切换显示模式">
+        <div class="status-dot"></div>
+        <span id="focusModeText">突出内容</span>
+    </div>
+    <div id="selectionMenu">发送到 AI</div>
+
+    <!-- Background Switcher Modal -->
+    <div id="bgModal" class="modal">
+        <div class="modal-content" style="max-width: 800px; margin-top: 10vh;">
+            <div class="modal-header">
+                <h2>壁纸库 (Steam Workshop)</h2>
+                <button class="nav-btn" id="disableBgBtn" style="background: #ff3b30; margin-left: auto; margin-right: 15px;">关闭背景</button>
+                <span class="close-modal" id="closeBgModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="wallpaperGallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; max-height: 400px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 20px;">
+                    <div style="color: #ccc; text-align: center; grid-column: 1/-1; padding: 20px;">正在扫描 Steam 库...</div>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0;">
+                
+                <p style="font-size: 13px; color: #eee; margin-bottom: 10px;">手动添加其他路径：</p>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="bgPathInput" placeholder="粘贴本地文件完整路径..." style="flex: 1; margin-bottom: 0;">
+                    <button class="nav-btn" id="saveBgBtn">应用</button>
+                    <button class="nav-btn" id="cancelBgBtn" style="background: #666;">取消</button>
+                </div>
+                <p style="font-size: 11px; color: #aaa; margin-top: 8px;">提示：在文件夹中 Shift+右键 文件，选择“复制为路径”即可快速获取。</p>
+            </div>
+        </div>
+    </div>
+    <div id="descModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">题目详情</h2>
+                <span class="close-modal" id="closeModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="modalBody" class="desc-text">加载中...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="ai-action-btn" id="sendDescToAi">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    发送给 AI 助手
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="kbModal" class="modal">
+        <div class="modal-content wide">
+            <span class="close-modal" id="closeKbModal">&times;</span>
+            <h2>本地知识库可视化看板</h2>
+            <div class="kb-dashboard">
+                <div class="kb-card">
+                    <h3 id="kbTotalChunks">-</h3>
+                    <p>索引片段总数 (Chunks)</p>
+                </div>
+                <div class="kb-card">
+                    <h3 id="kbTotalDocs">-</h3>
+                    <p>索引文档总数 (Documents)</p>
+                </div>
+            </div>
+            <div class="kb-search-box">
+                <input type="text" id="kbSearchInput" placeholder="输入关键词测试向量语义检索...">
+                <div id="kbSearchResults" class="kb-search-results"></div>
+            </div>
+        </div>
+    </div>
+    <div class="main-content">
+        <div class="container">
+            <h1>笔试/面试题目搜索</h1>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="输入题目名称、公司或考点搜索...">
+            </div>
+            <div class="filters" id="categoryFilters">
+                <button class="filter-btn active" data-cat="all">全部</button>
+                <button class="filter-btn" data-cat="favorite">⭐ 我的收藏</button>
+                <button class="filter-btn" data-cat="completed">✅ 已完成</button>
+                <button class="filter-btn" data-cat="LeetCode Hot100">LeetCode Hot100</button>
+                <button class="filter-btn" data-cat="笔试真题">笔试真题</button>
+                <button class="filter-btn" data-cat="面试真题">面试真题</button>
+                <button class="filter-btn" data-cat="AI专项">AI专项</button>
+                <button id="viewKbBtn" class="filter-btn" style="background: #eceff1;">知识库看板</button>
+                <button id="syncObsidianBtn" class="obsidian-btn" style="margin-left: auto; border-radius: 15px;">同步到 Obsidian</button>
+            </div>
+            <div class="filters" id="companyFilters" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 10px;">
+                <span style="font-size: 13px; color: #666; margin-right: 10px; align-self: center;">厂牌分类:</span>
+                <button class="filter-btn active" data-company="all">全部</button>
+                <!-- Companies will be injected here -->
+            </div>
+            <div id="webLinkBanner" class="web-link-banner">
+                <div>
+                    <strong style="color: #0d47a1;">📚 在线面试指南:</strong>
+                    <span style="font-size: 13px; margin-left: 10px; color: #555;">正在查看 adongwanai.github.io/AgentGuide</span>
+                </div>
+                <a href="https://adongwanai.github.io/AgentGuide/interview/" target="_blank" class="nav-btn" style="text-decoration: none; padding: 6px 15px;">在新窗口打开</a>
+            </div>
+            <div class="results-info" id="resultsInfo">加载中...</div>
+            <ul class="problem-list" id="problemList"></ul>
+            
+            <!-- Pagination -->
+            <div id="pagination" style="margin-top: 20px; display: flex; justify-content: center; gap: 10px; align-items: center;">
+                <button id="prevPage" class="nav-btn" style="background: #f0f0f0; color: #333;">上一页</button>
+                <span id="pageInfo" style="font-size: 14px; color: #666;">第 1 页</span>
+                <button id="nextPage" class="nav-btn" style="background: #f0f0f0; color: #333;">下一页</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="ai-sidebar" id="aiSidebar">
+        <!-- New Session List Panel -->
+        <div class="session-panel" id="sessionPanel">
+            <div class="session-list-header">
+                <strong>对话历史</strong>
+                <span class="close-modal" id="hideSessionsBtn" style="font-size: 16px;">&times;</span>
+            </div>
+            <button class="new-chat-btn" id="newChatBtn">+ 开启新对话</button>
+            <div class="session-items" id="sessionItems">
+                <!-- Session items will be injected here -->
+            </div>
+        </div>
+        
+        <div class="chat-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center;">
+                <span class="toggle-sessions" id="toggleSessionsBtn">☰</span>
+                <span id="currentSessionTitle">DeepSeek AI 助手</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="syncStatus" style="font-size: 10px; color: #4caf50; display: none;">● 已同步</span>
+                <label style="font-size: 11px; color: #666; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" id="autoSyncObsidian" checked>
+                    同步 Obsidian
+                </label>
+                <button id="clearChatBtn" style="font-size: 11px; padding: 3px 6px; border: 1px solid #ddd; border-radius: 4px; background: white; cursor: pointer; color: #666;">清空</button>
+            </div>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai-message">你好！我是 DeepSeek AI 助手。我可以帮你分析题目、提供思路或编写代码。</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="输入你的问题...">
+            <button id="sendChat">发送</button>
+        </div>
+    </div>
+
+    <div id="openMenu" class="open-menu">
+        <div class="open-menu-title">选择打开方式</div>
+        <button class="nav-btn" id="openWithDefaultBtn">系统默认</button>
+        <button class="nav-btn" id="openWithCodeBtn">VS Code</button>
+        <button class="nav-btn" id="openWithTraeBtn">Trae</button>
+        <label class="open-menu-row">
+            <input type="checkbox" id="rememberOpenChoice">
+            记住选择
+        </label>
+    </div>
+
+    <script>
+        // Set dynamic wallpaper from Wallpaper Engine local path
+        // Use the actual video file for better quality and dynamic effects
+        // Use forward slashes for better cross-platform compatibility even on Windows
+        const DEFAULT_WALLPAPER = "";
+        
+        function initBackground(path) {
+            const bgContainer = document.getElementById('bg-container');
+            const bgVideo = document.getElementById('bg-video');
+            if (!bgContainer || !bgVideo) return;
+
+            console.log("Attempting to switch background to:", path);
+
+            // Stop current video and clear state
+            bgVideo.pause();
+            bgVideo.oncanplaythrough = null;
+            bgVideo.onloadeddata = null;
+            bgVideo.onerror = null;
+            bgVideo.removeAttribute('src');
+            bgVideo.load();
+            bgVideo.style.opacity = '0';
+
+            // Default gradient background (InterviewGuide Style)
+            bgContainer.style.background = "radial-gradient(circle at 20% 20%, #f0f4ff 0%, #ffffff 50%, #f5f0ff 100%)";
+            bgContainer.style.backgroundImage = 'none';
+            bgContainer.style.opacity = '1';
+
+            if (!path || path === 'none') {
+                console.log("Background disabled or cleared.");
+                return;
+            }
+
+            const encodedPath = encodeURIComponent(path);
+            const url = `/get_wallpaper?path=${encodedPath}&t=${Date.now()}`;
+            const isVideo = path.toLowerCase().endsWith('.mp4');
+            
+            if (isVideo) {
+                console.log("Setting background Video URL:", url);
+                
+                // Timeout to fallback if video takes too long (> 3s)
+                const loadTimeout = setTimeout(() => {
+                    if (bgVideo.readyState < 3) { // Have enough data
+                        console.warn("Video load timeout, trying fallback to preview.");
+                        bgVideo.onerror();
+                    }
+                }, 3000);
+
+                bgVideo.onerror = () => {
+                    clearTimeout(loadTimeout);
+                    const err = bgVideo.error;
+                    console.error("Video failed to load or timeout. Code:", err ? err.code : "N/A");
+                    
+                    // Fallback to static preview
+                    const previewPath = path.substring(0, path.lastIndexOf('/')) + '/preview.gif';
+                    console.log("Switching to static fallback:", previewPath);
+                    bgContainer.style.backgroundImage = `url('/get_wallpaper?path=${encodeURIComponent(previewPath)}&t=${Date.now()}')`;
+                    bgContainer.style.backgroundSize = 'cover';
+                    bgContainer.style.opacity = '1';
+                    bgVideo.style.opacity = '0';
+                };
+
+                bgVideo.onloadeddata = () => {
+                    clearTimeout(loadTimeout);
+                    console.log("Video data loaded, starting playback...");
+                    bgVideo.play().then(() => {
+                        bgVideo.style.opacity = '1';
+                        bgContainer.style.background = "transparent";
+                    }).catch(err => {
+                        console.warn("Auto-play failed:", err);
+                        bgVideo.style.opacity = '1';
+                        bgContainer.style.background = "transparent";
+                    });
+                };
+
+                bgVideo.src = url;
+                bgVideo.load();
+            } else {
+                console.log("Setting background Image URL:", url);
+                bgContainer.style.backgroundImage = `url('${url}')`;
+                bgContainer.style.backgroundSize = 'cover';
+                bgContainer.style.opacity = '1';
+                bgVideo.style.opacity = '0';
+            }
+        }
+
+        // Initialize from localStorage or default
+        const savedPath = localStorage.getItem('wallpaperPath');
+        if (savedPath === 'none') {
+            initBackground(null);
+        } else {
+            initBackground(savedPath || DEFAULT_WALLPAPER);
+        }
+
+        // Background switcher handler
+        const bgModal = document.getElementById('bgModal');
+        const bgPathInput = document.getElementById('bgPathInput');
+        const focusModeToggle = document.getElementById('focusModeToggle');
+        const focusModeText = document.getElementById('focusModeText');
+        const wallpaperGallery = document.getElementById('wallpaperGallery');
+        
+        async function loadWallpaperGallery() {
+            try {
+                const response = await fetch('/list_wallpapers');
+                const wallpapers = await response.json();
+                
+                if (wallpapers.length === 0) {
+                    wallpaperGallery.innerHTML = '<div style="color: #aaa; text-align: center; grid-column: 1/-1; padding: 20px;">未发现 Steam 壁纸库，请确保路径正确。</div>';
+                    return;
+                }
+                
+                wallpaperGallery.innerHTML = '';
+                
+                // Add "None" option to gallery as well for convenience
+                const noneItem = document.createElement('div');
+                noneItem.style.cssText = `
+                    cursor: pointer;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    aspect-ratio: 16/9;
+                    position: relative;
+                    transition: transform 0.2s;
+                    background: radial-gradient(circle at 20% 20%, #f0f4ff 0%, #ffffff 50%, #f5f0ff 100%);
+                    border: 2px solid rgba(0,0,0,0.05);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: #555;
+                    font-weight: bold;
+                    font-size: 14px;
+                `;
+                noneItem.innerHTML = '简洁默认';
+                noneItem.onclick = () => {
+                    localStorage.setItem('wallpaperPath', 'none');
+                    initBackground(null);
+                    bgModal.style.display = 'none';
+                };
+                noneItem.onmouseenter = () => { noneItem.style.transform = 'scale(1.05)'; noneItem.style.borderColor = '#007aff'; };
+                noneItem.onmouseleave = () => { noneItem.style.transform = 'scale(1)'; noneItem.style.borderColor = 'transparent'; };
+                wallpaperGallery.appendChild(noneItem);
+
+                wallpapers.forEach(wp => {
+                    const item = document.createElement('div');
+                    item.className = 'wallpaper-item';
+                    item.style.cssText = `
+                        cursor: pointer;
+                        border-radius: 8px;
+                        overflow: hidden;
+                        aspect-ratio: 16/9;
+                        position: relative;
+                        transition: transform 0.2s;
+                        background: #333;
+                        border: 2px solid transparent;
+                    `;
+                    
+                    const isPreviewVideo = wp.preview.toLowerCase().endsWith('.mp4');
+                    item.innerHTML = `
+                        ${isPreviewVideo ? 
+                            `<video src="/get_wallpaper?path=${encodeURIComponent(wp.preview)}&t=${Date.now()}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;" muted loop></video>` :
+                            `<img src="/get_wallpaper?path=${encodeURIComponent(wp.preview)}&t=${Date.now()}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">`
+                        }
+                        <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); color: white; font-size: 10px; padding: 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;">
+                            ${wp.type === 'video' ? '📹' : '🖼️'} ${wp.title || wp.id}
+                        </div>
+                    `;
+                    
+                    item.onclick = () => {
+                        console.log("Wallpaper item clicked:", wp.title || wp.id, "Path:", wp.path);
+                        localStorage.setItem('wallpaperPath', wp.path);
+                        initBackground(wp.path);
+                        bgModal.style.display = 'none';
+                    };
+
+                    item.onmouseenter = () => {
+                        item.style.transform = 'scale(1.05)';
+                        item.style.borderColor = '#007aff';
+                        const video = item.querySelector('video');
+                        if (video) video.play().catch(() => {});
+                    };
+                    item.onmouseleave = () => {
+                        item.style.transform = 'scale(1)';
+                        item.style.borderColor = 'transparent';
+                        const video = item.querySelector('video');
+                        if (video) {
+                            video.pause();
+                            video.currentTime = 0;
+                        }
+                    };
+                    wallpaperGallery.appendChild(item);
+                });
+            } catch (err) {
+                console.error("Failed to load wallpaper gallery:", err);
+                wallpaperGallery.innerHTML = '<div style="color: #ff4d4f; text-align: center; grid-column: 1/-1; padding: 20px;">加载失败，请检查服务器连接。</div>';
+            }
+        }
+
+        document.getElementById('bgSwitcher').onclick = () => {
+            bgPathInput.value = localStorage.getItem('wallpaperPath') || DEFAULT_WALLPAPER;
+            bgModal.style.display = 'block';
+            loadWallpaperGallery();
+        };
+
+        focusModeToggle.onclick = () => {
+            const isFocusBg = document.body.classList.toggle('focus-bg');
+            focusModeText.innerText = isFocusBg ? "突出背景" : "突出内容";
+            localStorage.setItem('focusMode', isFocusBg ? 'bg' : 'content');
+        };
+
+        // Init focus mode from storage
+        if (localStorage.getItem('focusMode') === 'bg') {
+            document.body.classList.add('focus-bg');
+            focusModeText.innerText = "突出背景";
+        }
+
+        document.getElementById('closeBgModal').onclick = () => bgModal.style.display = 'none';
+        document.getElementById('cancelBgBtn').onclick = () => bgModal.style.display = 'none';
+        
+        document.getElementById('disableBgBtn').onclick = () => {
+            localStorage.setItem('wallpaperPath', 'none');
+            initBackground(null);
+            bgModal.style.display = 'none';
+        };
+        
+        document.getElementById('saveBgBtn').onclick = () => {
+            const newPath = bgPathInput.value.trim();
+            if (newPath) {
+                localStorage.setItem('wallpaperPath', newPath);
+                initBackground(newPath);
+                bgModal.style.display = 'none';
+            }
+        };
+
+        // Close modal when clicking outside
+        window.onclick = (event) => {
+            const descModal = document.getElementById('descModal');
+            if (event.target == descModal) descModal.style.display = "none";
+            if (event.target == bgModal) bgModal.style.display = "none";
+        };
+        let currentCat = 'all';
+        let currentCompany = 'all';
+        let currentPage = 1;
+        const pageSize = 50;
+        let messageHistory = [];
+        let progressState = { completed: [], favorite: [] };
+
+        // Progress System Logic
+        const PROGRESS_KEY = 'search-tool-progress-v1';
+        
+        function loadProgress() {
+            try {
+                const stored = localStorage.getItem(PROGRESS_KEY);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (parsed && Array.isArray(parsed.completed) && Array.isArray(parsed.favorite)) {
+                        progressState = parsed;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load progress:", e);
+                progressState = { completed: [], favorite: [] };
+            }
+        }
+        
+        function saveProgress() {
+            try {
+                localStorage.setItem(PROGRESS_KEY, JSON.stringify(progressState));
+            } catch (e) {
+                console.error("Failed to save progress:", e);
+            }
+        }
+        
+        function toggleCompleted(path) {
+            if (progressState.completed.includes(path)) {
+                progressState.completed = progressState.completed.filter(p => p !== path);
+            } else {
+                progressState.completed.push(path);
+            }
+            saveProgress();
+            updateResults();
+        }
+        
+        function toggleFavorite(path) {
+            if (progressState.favorite.includes(path)) {
+                progressState.favorite = progressState.favorite.filter(p => p !== path);
+            } else {
+                progressState.favorite.push(path);
+            }
+            saveProgress();
+            updateResults();
+        }
+
+        // Initialize progress early
+        loadProgress();
+
+        fetch('/problems.json')
+            .then((r) => {
+                if (!r.ok) {
+                    throw new Error(`HTTP ${r.status}`);
+                }
+                return r.json();
+            })
+            .then((data) => {
+                allProblems = data;
+                initCompanyFilters();
+                updateResults();
+            })
+            .catch((err) => {
+                console.error('Failed to load problems.json:', err);
+                const resultsInfoEl = document.getElementById('resultsInfo');
+                if (resultsInfoEl) {
+                    resultsInfoEl.textContent = `加载题库失败：${err.message || String(err)}`;
+                }
+            });
+
+        function initCompanyFilters() {
+            const companyFilters = document.getElementById('companyFilters');
+            const companies = [...new Set(allProblems.map(p => p.company).filter(c => c && c !== "其他"))].sort();
+            
+            companies.forEach(company => {
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn';
+                btn.dataset.company = company;
+                btn.textContent = company;
+                btn.onclick = () => {
+                    document.querySelectorAll('#companyFilters .filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentCompany = company;
+                    currentPage = 1;
+                    updateResults();
+                };
+                companyFilters.appendChild(btn);
+            });
+            
+            // Re-bind the "All" button in company filters
+            const allCompanyBtn = companyFilters.querySelector('[data-company="all"]');
+            allCompanyBtn.onclick = () => {
+                document.querySelectorAll('#companyFilters .filter-btn').forEach(b => b.classList.remove('active'));
+                allCompanyBtn.classList.add('active');
+                currentCompany = 'all';
+                currentPage = 1;
+                updateResults();
+            };
+        }
+
+        const searchInput = document.getElementById('searchInput');
+        const problemList = document.getElementById('problemList');
+        const resultsInfo = document.getElementById('resultsInfo');
+        const syncObsidianBtn = document.getElementById('syncObsidianBtn');
+
+        searchInput.oninput = () => {
+            currentPage = 1;
+            updateResults();
+        };
+
+        document.querySelectorAll('#categoryFilters .filter-btn').forEach(btn => {
+            if (btn.id === 'viewKbBtn' || btn.id === 'syncObsidianBtn') return;
+            btn.onclick = () => {
+                document.querySelectorAll('#categoryFilters .filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentCat = btn.dataset.cat;
+                currentPage = 1;
+                updateResults();
+            };
+        });
+
+        // Pagination handlers
+        document.getElementById('prevPage').onclick = () => {
+            if (currentPage > 1) {
+                currentPage--;
+                updateResults();
+                window.scrollTo(0, 0);
+            }
+        };
+
+        document.getElementById('nextPage').onclick = () => {
+            const filtered = getFilteredProblems();
+            if (currentPage * pageSize < filtered.length) {
+                currentPage++;
+                updateResults();
+                window.scrollTo(0, 0);
+            }
+        };
+
+        function getFilteredProblems() {
+            const query = searchInput.value.toLowerCase();
+            return allProblems.filter(p => {
+                const matchesSearch = p.name.toLowerCase().includes(query) || p.path.toLowerCase().includes(query);
+                
+                let matchesCat = false;
+                if (currentCat === 'all') matchesCat = true;
+                else if (currentCat === 'favorite') matchesCat = progressState.favorite && progressState.favorite.includes(p.path);
+                else if (currentCat === 'completed') matchesCat = progressState.completed && progressState.completed.includes(p.path);
+                else matchesCat = p.category === currentCat;
+                
+                let matchesCompany = true;
+                if (currentCompany !== 'all') {
+                    matchesCompany = p.company === currentCompany;
+                }
+                
+                return matchesSearch && matchesCat && matchesCompany;
+            });
+        }
+
+        function updateResults() {
+            const problemList = document.getElementById('problemList');
+            const webLinkBanner = document.getElementById('webLinkBanner');
+            const filtered = getFilteredProblems();
+
+            if (currentCat === '面试真题') {
+                webLinkBanner.style.display = 'flex';
+            } else {
+                webLinkBanner.style.display = 'none';
+            }
+            
+            const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+
+            resultsInfo.textContent = `找到 ${filtered.length} 个结果`;
+            
+            // Update pagination UI
+            document.getElementById('pageInfo').textContent = `第 ${currentPage} / ${totalPages} 页`;
+            document.getElementById('prevPage').disabled = currentPage === 1;
+            document.getElementById('nextPage').disabled = currentPage === totalPages;
+            document.getElementById('pagination').style.display = filtered.length > pageSize ? 'flex' : 'none';
+
+            problemList.innerHTML = '';
+            const start = (currentPage - 1) * pageSize;
+            const pageResults = filtered.slice(start, start + pageSize);
+            
+            pageResults.forEach(p => {
+                const isCompleted = progressState.completed && progressState.completed.includes(p.path);
+                const isFavorite = progressState.favorite && progressState.favorite.includes(p.path);
+                
+                const li = document.createElement('li');
+                li.className = 'problem-item';
+                li.innerHTML = `
+                    <div class="problem-info">
+                        <div class="problem-title" onclick="showDescription('${p.path}', '${p.name.replace(/'/g, "\\'")}')">${p.name}</div>
+                        <div class="problem-path">
+                            <span class="problem-tag cat-tag">${p.category}</span>
+                            ${p.company && p.company !== '其他' ? `<span class="problem-tag ai-tag" style="background-color: #e3f2fd; color: #1565c0;">${p.company}</span>` : ''}
+                            ${p.isAI ? '<span class="problem-tag ai-tag">AI</span>' : ''}
+                            ${p.path}
+                        </div>
+                    </div>
+                    <div>
+                        <button class="nav-btn" style="background: ${isCompleted ? '#4caf50' : '#f0f0f0'}; color: ${isCompleted ? 'white' : '#333'}; margin-right: 5px;" onclick="toggleCompleted('${p.path}')">
+                            ${isCompleted ? '✅ 已完成' : '◻️ 标记完成'}
+                        </button>
+                        <button class="nav-btn" style="background: ${isFavorite ? '#ff9800' : '#f0f0f0'}; color: ${isFavorite ? 'white' : '#333'}; margin-right: 5px;" onclick="toggleFavorite('${p.path}')">
+                            ${isFavorite ? '⭐ 已收藏' : '☆ 收藏'}
+                        </button>
+                        <button class="nav-btn open-trigger" onclick="openFile('${p.path}', this)">转到题目</button>
+                        <button class="obsidian-btn" onclick='openInObsidian(${JSON.stringify(p)})'>Obsidian</button>
+                    </div>
+                `;
+                problemList.appendChild(li);
+            });
+        }
+
+        syncObsidianBtn.onclick = async () => {
+            const filtered = getFilteredProblems();
+
+            if (filtered.length === 0) {
+                alert("没有找到符合条件的题目，无法同步。");
+                return;
+            }
+
+            if (filtered.length > 200) {
+                if (!confirm(`当前筛选出 ${filtered.length} 道题目，同步可能需要一些时间。是否继续？`)) return;
+            }
+
+            let categoryName = currentCat === 'all' ? "全部题目" : currentCat;
+            if (currentCompany !== 'all') categoryName += `_${currentCompany}`;
+            const query = searchInput.value.toLowerCase();
+            if (query) categoryName += `_${query}`;
+
+            syncObsidianBtn.textContent = "正在同步...";
+            syncObsidianBtn.disabled = true;
+
+            try {
+                const res = await fetch('/sync_category', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        category: categoryName,
+                        problems: filtered
+                    })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`同步成功！笔记已保存至: ${data.file}`);
+                } else {
+                    alert(`同步失败: ${data.error}`);
+                }
+            } catch (e) {
+                alert(`请求出错: ${e.message}`);
+            } finally {
+                syncObsidianBtn.textContent = "同步当前分类到 Obsidian";
+                syncObsidianBtn.disabled = false;
+            }
+        };
+
+        const OPEN_IDE_KEY = 'search-tool-open-ide-v1';
+        let pendingOpenPath = null;
+        const openMenuEl = document.getElementById('openMenu');
+        const rememberOpenChoiceEl = document.getElementById('rememberOpenChoice');
+
+        function getOpenPreference() {
+            const v = localStorage.getItem(OPEN_IDE_KEY);
+            if (v === 'code' || v === 'trae' || v === 'default') return v;
+            return 'ask';
+        }
+
+        function setOpenPreference(v) {
+            if (v === 'code' || v === 'trae' || v === 'default') {
+                localStorage.setItem(OPEN_IDE_KEY, v);
+            } else {
+                localStorage.removeItem(OPEN_IDE_KEY);
+            }
+        }
+
+        function hideOpenMenu() {
+            pendingOpenPath = null;
+            rememberOpenChoiceEl.checked = false;
+            openMenuEl.style.display = 'none';
+        }
+
+        function showOpenMenu(path, anchor) {
+            pendingOpenPath = path;
+            let x = window.innerWidth / 2;
+            let y = window.innerHeight / 2;
+            if (anchor && typeof anchor.getBoundingClientRect === 'function') {
+                const rect = anchor.getBoundingClientRect();
+                x = rect.left;
+                y = rect.bottom;
+            }
+            openMenuEl.style.left = `${Math.min(Math.max(8, x), window.innerWidth - 240)}px`;
+            openMenuEl.style.top = `${Math.min(Math.max(8, y), window.innerHeight - 180)}px`;
+            openMenuEl.style.display = 'block';
+        }
+
+        async function openFileWithIde(path, ide) {
+            const res = await fetch(`/open?path=${encodeURIComponent(path)}&ide=${encodeURIComponent(ide)}`);
+            const text = await res.text();
+            if (!res.ok) {
+                try {
+                    const data = JSON.parse(text);
+                    alert(`无法打开: ${data.error || path}`);
+                } catch {
+                    alert(`无法打开: ${text || path}`);
+                }
+            }
+        }
+
+        function openFile(path, anchor) {
+            showOpenMenu(path, anchor);
+        }
+
+        function openFileChoose(ide) {
+            if (!pendingOpenPath) return;
+            const path = pendingOpenPath;
+            const remember = rememberOpenChoiceEl.checked;
+            hideOpenMenu();
+            if (remember) setOpenPreference(ide);
+            openFileWithIde(path, ide).catch((e) => alert('错误: ' + (e && e.message ? e.message : e)));
+        }
+
+        document.getElementById('openWithDefaultBtn').onclick = () => openFileChoose('default');
+        document.getElementById('openWithCodeBtn').onclick = () => openFileChoose('code');
+        document.getElementById('openWithTraeBtn').onclick = () => openFileChoose('trae');
+
+        window.addEventListener('click', (e) => {
+            if (openMenuEl.style.display !== 'block') return;
+            if (openMenuEl.contains(e.target)) return;
+            if (e.target && e.target.closest && e.target.closest('.open-trigger')) return;
+            hideOpenMenu();
+        });
+
+        async function openInObsidian(p) {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = "同步中...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/sync_single', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(p)
+                });
+                
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        throw new Error(errorData.error || '服务器同步失败');
+                    } catch (e) {
+                        throw new Error(errorText || `服务器响应错误 (HTTP ${res.status})`);
+                    }
+                }
+                
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert(`同步成功！笔记已存至 Obsidian: ${data.file}`);
+                } else {
+                    alert(`同步失败: ${data.error}`);
+                }
+            } catch (e) {
+                alert(`请求出错: ${e.message}`);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function showDescription(path, title) {
+            const modal = document.getElementById('descModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+            
+            // Clean title: remove common extensions and company prefixes if redundant
+            let displayTitle = title.replace(/\.(ipynb|py|md)$/i, '');
+            modalTitle.textContent = displayTitle;
+            modalBody.innerHTML = '<div style="text-align:center; padding: 40px; color:#86868b;">加载中...</div>';
+            modal.style.display = 'block';
+            
+            fetch(`/get_description?path=${encodeURIComponent(path)}`)
+                .then(res => res.text())
+                .then(text => {
+                    if (!text) {
+                        modalBody.innerHTML = '<div style="text-align:center; padding: 40px; color:#86868b;">未找到题目描述。</div>';
+                        return;
+                    }
+
+                    // Render markdown if marked.js is available; fallback to plain text if offline.
+                    if (typeof window.marked !== 'undefined' && typeof window.marked.parse === 'function') {
+                        // Remove repetitive titles from the content if they match the main title
+                        let processedText = text;
+                        const titlePattern = new RegExp(`^#+\\s*${displayTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`, 'i');
+                        processedText = processedText.replace(titlePattern, '');
+                        
+                        modalBody.innerHTML = window.marked.parse(processedText);
+                    } else if (typeof window.marked === 'function') {
+                        modalBody.innerHTML = window.marked(text);
+                    } else {
+                        modalBody.textContent = text;
+                    }
+                })
+                .catch(err => {
+                    modalBody.innerHTML = `<div style="text-align:center; padding: 40px; color:#d32f2f;">加载失败: ${err}</div>`;
+                });
+        }
+
+        document.getElementById('closeModal').onclick = () => {
+            document.getElementById('descModal').style.display = 'none';
+        };
+        window.onclick = (event) => {
+            const modal = document.getElementById('descModal');
+            if (event.target == modal) modal.style.display = 'none';
+        };
+
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendChat = document.getElementById('sendChat');
+        const selectionMenu = document.getElementById('selectionMenu');
+        const sendDescToAi = document.getElementById('sendDescToAi');
+        const viewKbBtn = document.getElementById('viewKbBtn');
+        const kbModal = document.getElementById('kbModal');
+        const closeKbModal = document.getElementById('closeKbModal');
+        const kbSearchInput = document.getElementById('kbSearchInput');
+        const kbSearchResults = document.getElementById('kbSearchResults');
+        
+        // Chat History Logic (Session based)
+        const SESSIONS_KEY = 'search-tool-sessions-v2';
+        let sessions = [];
+        let activeSessionId = null;
+
+        function initSessions() {
+            // Configure marked for better rendering
+            if (window.marked && typeof window.marked.setOptions === 'function') {
+                window.marked.setOptions({
+                    breaks: true,
+                    gfm: true
+                });
+            }
+            try {
+                const stored = localStorage.getItem(SESSIONS_KEY);
+                if (stored) {
+                    sessions = JSON.parse(stored);
+                }
+                
+                if (sessions.length === 0) {
+                    createNewSession();
+                } else {
+                    activeSessionId = sessions[0].id;
+                }
+                renderSessionList();
+                renderChatHistory();
+            } catch (e) {
+                console.error("Failed to init sessions:", e);
+                createNewSession();
+            }
+        }
+
+        function createNewSession() {
+            const newSession = {
+                id: Date.now().toString(),
+                title: "新对话 " + (sessions.length + 1),
+                messages: [],
+                createdAt: new Date().toISOString()
+            };
+            sessions.unshift(newSession);
+            activeSessionId = newSession.id;
+            saveSessions();
+            renderSessionList();
+            renderChatHistory();
+            return newSession;
+        }
+
+        function saveSessions() {
+            try {
+                localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+            } catch (e) {
+                console.error("Failed to save sessions:", e);
+            }
+        }
+
+        function deleteSession(id, event) {
+            if (event) event.stopPropagation();
+            if (sessions.length <= 1) {
+                alert("至少需要保留一个对话。");
+                return;
+            }
+            sessions = sessions.filter(s => s.id !== id);
+            if (activeSessionId === id) {
+                activeSessionId = sessions[0].id;
+            }
+            saveSessions();
+            renderSessionList();
+            renderChatHistory();
+        }
+
+        function switchSession(id) {
+            activeSessionId = id;
+            renderSessionList();
+            renderChatHistory();
+            // Auto hide sessions on mobile/narrow view if needed
+            // hideSessions(); 
+        }
+
+        function renderSessionList() {
+            const container = document.getElementById('sessionItems');
+            container.innerHTML = '';
+            sessions.forEach(s => {
+                const div = document.createElement('div');
+                div.className = 'session-item' + (s.id === activeSessionId ? ' active' : '');
+                div.onclick = () => switchSession(s.id);
+                div.innerHTML = `
+                    ${s.title}
+                    <span class="delete-session" onclick="deleteSession('${s.id}', event)">&times;</span>
+                `;
+                container.appendChild(div);
+            });
+            
+            const current = sessions.find(s => s.id === activeSessionId);
+            if (current) {
+                document.getElementById('currentSessionTitle').textContent = current.title;
+            }
+        }
+
+        function renderChatHistory() {
+            const currentSession = sessions.find(s => s.id === activeSessionId);
+            const history = currentSession ? currentSession.messages : [];
+            
+            // Clear all except the first welcome message
+            while (chatMessages.children.length > 1) {
+                chatMessages.removeChild(chatMessages.lastChild);
+            }
+            
+            history.forEach(msg => {
+                const div = document.createElement('div');
+                div.className = 'message ' + (msg.role === 'user' ? 'user-message' : 'ai-message');
+                
+                if (typeof window.marked !== 'undefined' && typeof window.marked.parse === 'function') {
+                    div.innerHTML = window.marked.parse(msg.content);
+                } else if (typeof window.marked === 'function') {
+                    // Support older marked versions or specific loads
+                    div.innerHTML = window.marked(msg.content);
+                } else {
+                    div.textContent = msg.content;
+                }
+                chatMessages.appendChild(div);
+            });
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Initialize sessions
+        if (document.readyState === 'complete') {
+            initSessions();
+        } else {
+            window.addEventListener('load', initSessions);
+        }
+
+        // UI Session Toggle Logic
+        const toggleSessionsBtn = document.getElementById('toggleSessionsBtn');
+        const hideSessionsBtn = document.getElementById('hideSessionsBtn');
+        const sessionPanel = document.getElementById('sessionPanel');
+        const aiSidebar = document.getElementById('aiSidebar');
+        const newChatBtn = document.getElementById('newChatBtn');
+
+        toggleSessionsBtn.onclick = () => {
+            sessionPanel.classList.toggle('active');
+            aiSidebar.classList.toggle('with-sessions');
+        };
+
+        hideSessionsBtn.onclick = () => {
+            sessionPanel.classList.remove('active');
+            aiSidebar.classList.remove('with-sessions');
+        };
+
+        newChatBtn.onclick = createNewSession;
+
+        // Clear chat logic
+        document.getElementById('clearChatBtn').onclick = () => {
+            if (confirm("确定要清空当前对话记录吗？")) {
+                const current = sessions.find(s => s.id === activeSessionId);
+                if (current) {
+                    current.messages = [];
+                    saveSessions();
+                    renderChatHistory();
+                }
+            }
+        };
+
+        // KB Modal Logic
+        viewKbBtn.onclick = () => {
+            kbModal.style.display = 'block';
+            fetch('/kb_stats')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('kbTotalChunks').textContent = data.total_chunks;
+                    document.getElementById('kbTotalDocs').textContent = data.total_docs;
+                });
+        };
+        closeKbModal.onclick = () => kbModal.style.display = 'none';
+        
+        kbSearchInput.oninput = debounce(() => {
+            const q = kbSearchInput.value;
+            if (!q) { kbSearchResults.innerHTML = ''; return; }
+            fetch(`/kb_search?q=${encodeURIComponent(q)}`)
+                .then(r => r.json())
+                .then(results => {
+                    kbSearchResults.innerHTML = results.map(r => `
+                        <div class="kb-search-item">
+                            <div class="reference-title" onclick="openFile('${r.source}')">${r.source}</div>
+                            <div style="margin-top:5px; color:#444;">${r.content.substring(0, 200)}...</div>
+                        </div>
+                    `).join('');
+                });
+        }, 500);
+
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        // Handle Text Selection
+        document.addEventListener('mouseup', (e) => {
+            const selection = window.getSelection();
+            const text = selection.toString().trim();
+            
+            if (text && !e.target.closest('.ai-sidebar')) {
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                
+                selectionMenu.style.display = 'block';
+                selectionMenu.style.left = `${rect.left + rect.width/2 - selectionMenu.offsetWidth/2 + window.scrollX}px`;
+                selectionMenu.style.top = `${rect.top - 35 + window.scrollY}px`;
+                
+                selectionMenu.onclick = () => {
+                    const cleanedText = text.replace(/\$/g, '').trim();
+                    chatInput.value = `针对这段内容我有疑问：\n\n"${cleanedText}"\n\n请帮我解释一下，如果涉及代码，请说明逻辑：`;
+                    selectionMenu.style.display = 'none';
+                    chatInput.focus();
+                };
+            } else {
+                if (e.target !== selectionMenu) {
+                    selectionMenu.style.display = 'none';
+                }
+            }
+        });
+
+        sendDescToAi.onclick = () => {
+            const title = document.getElementById('modalTitle').textContent;
+            let body = document.getElementById('modalBody').textContent;
+            
+            // Cleanup body text for AI
+            body = body.replace(/\$/g, '') // Remove LaTeX dollar signs
+                       .replace(/#+P\d+\.?\s*/g, '') // Remove problem IDs like #P1917
+                       .replace(/\n{3,}/g, '\n\n') // Normalize multiple newlines
+                       .trim();
+            
+            chatInput.value = `请帮我分析一下这道题目《${title}》：\n\n【题目背景与描述】\n${body}\n\n请提供：\n1. 核心解题思路\n2. 复杂度分析\n3. 符合 ACM 模式的 Python 代码实现`;
+            document.getElementById('descModal').style.display = 'none';
+            chatInput.focus();
+            // Optional: Auto-scroll to bottom of input to show the prompt
+            chatInput.scrollTop = chatInput.scrollHeight;
+        };
+
+        sendChat.onclick = sendMessage;
+        chatInput.onkeypress = (e) => { if(e.key === 'Enter') sendMessage(); };
+
+        let isSyncing = false;
+        let lastSyncTime = 0;
+        const SYNC_COOLDOWN = 800; // Reduced to 0.8 seconds for real-time feel
+
+        async function syncCurrentChatToObsidian(force = false) {
+            const autoSync = document.getElementById('autoSyncObsidian').checked;
+            const statusEl = document.getElementById('syncStatus');
+            if (!autoSync) {
+                statusEl.style.display = 'none';
+                return;
+            }
+
+            // Concurrency and Throttling Control
+            const now = Date.now();
+            if (!force && (isSyncing || (now - lastSyncTime < SYNC_COOLDOWN))) {
+                return; 
+            }
+
+            const currentSession = sessions.find(s => s.id === activeSessionId);
+            if (!currentSession || currentSession.messages.length === 0) return;
+
+            isSyncing = true;
+            lastSyncTime = now;
+            statusEl.textContent = '● 同步中...';
+            statusEl.style.color = '#ff9800';
+            statusEl.style.display = 'inline-block';
+
+            try {
+                const res = await fetch('/sync_chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: currentSession.title,
+                        messages: currentSession.messages
+                    })
+                });
+                if (res.ok) {
+                    statusEl.textContent = '● 已同步';
+                    statusEl.style.color = '#4caf50';
+                    setTimeout(() => { if (!isSyncing) statusEl.style.display = 'none'; }, 2000);
+                } else {
+                    statusEl.textContent = '● 同步失败';
+                    statusEl.style.color = '#f44336';
+                }
+            } catch (e) {
+                console.error("Auto-sync to Obsidian failed:", e);
+                statusEl.textContent = '● 同步失败';
+                statusEl.style.color = '#f44336';
+            } finally {
+                isSyncing = false;
+            }
+        }
+
+        async function sendMessage() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            const currentSession = sessions.find(s => s.id === activeSessionId);
+            if (!currentSession) return;
+
+            // Update session title based on first message
+            if (currentSession.messages.length === 0) {
+                currentSession.title = text.substring(0, 20) + (text.length > 20 ? '...' : '');
+                renderSessionList();
+            }
+
+            // User message
+            const userDiv = document.createElement('div');
+            userDiv.className = 'message user-message';
+            if (typeof window.marked !== 'undefined' && typeof window.marked.parse === 'function') {
+                userDiv.innerHTML = window.marked.parse(text);
+            } else if (typeof window.marked === 'function') {
+                userDiv.innerHTML = window.marked(text);
+            } else {
+                userDiv.textContent = text;
+            }
+            chatMessages.appendChild(userDiv);
+            chatInput.value = '';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            currentSession.messages.push({ role: "user", content: text });
+            saveSessions();
+            
+            // Sync user message immediately (force)
+            syncCurrentChatToObsidian(true);
+
+            // AI message container
+            const aiMsgDiv = document.createElement('div');
+            aiMsgDiv.className = 'message ai-message';
+            aiMsgDiv.textContent = '思考中...';
+            chatMessages.appendChild(aiMsgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Pre-push an empty assistant message to persistence
+            const assistantMsgIndex = currentSession.messages.length;
+            currentSession.messages.push({ role: "assistant", content: "" });
+            saveSessions();
+
+            let fullAiResponse = "";
+            let currentRefs = [];
+            let chunkCount = 0;
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: currentSession.messages.slice(0, assistantMsgIndex) }) // Send history without the empty placeholder
+                });
+
+                // Check if the response is actually a stream
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('text/event-stream')) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || '服务器未返回流式数据');
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                aiMsgDiv.textContent = ""; // Clear "思考中"
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6);
+                            if (dataStr === '[DONE]') break;
+
+                            try {
+                                const data = JSON.parse(dataStr);
+                                if (data.type === 'references') {
+                                    currentRefs = data.data;
+                                } else if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
+                                    const content = data.choices[0].delta.content;
+                                    fullAiResponse += content;
+                                    chunkCount++;
+                                    
+                                    // Update local state and persistence in real-time
+                                    currentSession.messages[assistantMsgIndex].content = fullAiResponse;
+                                    if (chunkCount % 10 === 0) saveSessions(); // Frequent save during stream
+
+                                    // Use marked to render if available
+                                    if (typeof window.marked !== 'undefined' && typeof window.marked.parse === 'function') {
+                                        aiMsgDiv.innerHTML = window.marked.parse(fullAiResponse);
+                                    } else if (typeof window.marked === 'function') {
+                                        aiMsgDiv.innerHTML = window.marked(fullAiResponse);
+                                    } else {
+                                        aiMsgDiv.textContent = fullAiResponse;
+                                    }
+                                    
+                                    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                                    // High frequency sync trigger (every 5 chunks)
+                                    if (chunkCount > 0 && chunkCount % 5 === 0) {
+                                        syncCurrentChatToObsidian(); 
+                                    }
+                                }
+                            } catch (e) {
+                                // Ignore partial/invalid JSON
+                            }
+                        }
+                    }
+                }
+
+                // Final save for this message
+                saveSessions();
+                
+                // Final sync after AI finishes (force)
+                syncCurrentChatToObsidian(true);
+
+                // Show References if any after stream ends
+                if (currentRefs && currentRefs.length > 0) {
+                    const refId = 'ref-' + Date.now();
+                    const toggleBtn = document.createElement('div');
+                    toggleBtn.className = 'toggle-ref';
+                    toggleBtn.textContent = '▶ 查看 AI 参考的本地资料';
+                    toggleBtn.onclick = () => {
+                        const box = document.getElementById(refId);
+                        const isHidden = box.style.display === 'none' || !box.style.display;
+                        box.style.display = isHidden ? 'block' : 'none';
+                        toggleBtn.textContent = isHidden ? '▼ 隐藏 AI 参考的本地资料' : '▶ 查看 AI 参考的本地资料';
+                    };
+
+                    const refBox = document.createElement('div');
+                    refBox.id = refId;
+                    refBox.className = 'reference-box';
+                    refBox.innerHTML = currentRefs.map(r => `
+                        <div style="margin-bottom:8px; border-bottom:1px dashed #ddd; padding-bottom:5px;">
+                            <div class="reference-title" onclick="openFile('${r.source}')">${r.source}</div>
+                            <div style="margin-top:3px;">${r.content.substring(0, 150)}...</div>
+                        </div>
+                    `).join('');
+
+                    aiMsgDiv.appendChild(document.createElement('br'));
+                    aiMsgDiv.appendChild(toggleBtn);
+                    aiMsgDiv.appendChild(refBox);
+                }
+
+            } catch (e) {
+                aiMsgDiv.textContent = '出错了: ' + e.message;
+                console.error(e);
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    </script>
+</body>
+</html>

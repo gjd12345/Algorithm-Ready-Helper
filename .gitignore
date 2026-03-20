@@ -1,0 +1,27 @@
+# IDE settings
+.vscode-extensions/
+.vscode-userdata/
+.vscode/
+
+# Local database and tools
+search_tool/chroma_db/
+search_tool/__pycache__/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Logs and temp files
+*.log
+.DS_Store
+
+# User personal data (as identified from status)
+大厂笔试真题/
+大厂面试真题/
+按类别的AI大厂机试/
+"大厂笔试真题/"
+"大厂面试真题/"
+"按类别的AI大厂机试/"
